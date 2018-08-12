@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+function check_if_user_exists {
+	[ "$0" = "" ] ? return 1 : return ${id $0 2>/dev/null >/dev/null; echo $?}
+}
+
+function change_pass {
+	if [ "$0" = "" ] || [ "$1" = "" ]; then
+		echo "User or pass null"
+		exit -1
+	fi
+	cat <<EOF | passwd $0
+$1
+$1
+EOF
+}
+
+function first_run {
+	useradd -m $0
+	change_pass $0 "$1"
+	tar -cp /home/$0 | xz -z9evc > /var/backup/${0}_user.tar.xz
+}
+
+function restore_from_backup {
+	rm -rf /home/$0
+	tar -xf /var/backup/${0}_user.tar.xz
+}
+
+function main {
+	local user="incognito"
+	local password="guest"
+	check_if_user_exists $user
+	if [ $? -eq 0 ]; then
+		first_run $user "$password"
+	else
+		if [ -f /var/backup/${user}_user.tar.xz ]; then
+			restore_from_backup $user
+		else
+			userdel -r $user
+			main $@
+		fi
+	fi
+}
+
+main $@
